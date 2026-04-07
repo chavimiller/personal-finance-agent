@@ -24,8 +24,30 @@ if uploaded_file:
 
     data.columns = data.columns.str.strip().str.lower().str.replace(" ", "_")
 
+    data['חובה'] = data['חובה'].str.replace(",", '', regex=True).astype(float)
+    data['זכות'] = data['זכות'].str.replace(',', '', regex=True).astype(float)
+    data['אסמכתא'] = data['אסמכתא'].astype(float)
+
+    data['תאריך'] = (
+        data['תאריך']
+        .astype(str)                 # ensure it's string
+        .str.strip()                 # remove leading/trailing spaces
+        .str.replace('\xa0', '', regex=False)   # non-breaking spaces
+        .str.replace('\u200f', '', regex=False) # right-to-left marks
+        .str.replace('"', '', regex=False)      # remove quotes
+    )
+    data['תאריך'] = pd.to_datetime(data['תאריך'], dayfirst=True, errors='coerce')
+    data['year_month'] = data['תאריך'].dt.to_period('M')
+    monthly_spending = data.groupby('year_month')['חובה'].sum().reset_index()
+    monthly_spending['year_month'] = monthly_spending['year_month'].astype(str)
+
     st.subheader("Preview of your data")
     st.dataframe(data.head(50))
 
     st.subheader("Columns detected")
     st.write(data.columns)
+
+    st.subheader("Total Spending per Month")
+    st.line_chart(
+        data=monthly_spending.set_index('year_month')['חובה']
+    )
