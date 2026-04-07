@@ -20,23 +20,12 @@ def normalize_string(s):
 uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
 
 if uploaded_file: 
-    raw_data = pd.read_csv(uploaded_file, header=None, dtype=str)
-    header_row_index = None
+    data = pd.read_csv(uploaded_file, header=2, dtype=str, encoding='utf-8-sig')
 
-    for i, row in raw_data.iterrows():
-        row_values = [normalize_string(c) for c in row]
-        if row_values == EXPECTED_HEADERS:
-            header_row_index = i
-            break
-    if header_row_index == None:
-        st.error("Could not find expected headers.")  
-    else:
-        clean_data = pd.read_csv(uploaded_file, header=header_row_index, dtype=str)
+    data.columns = data.columns.str.strip().str.lower().str.replace(" ", "_")
 
-        clean_data.columns = clean_data.columns.str.strip().str.lower().str.replace(" ", "_")
+    st.subheader("Preview of your data")
+    st.dataframe(data.head(50))
 
-        st.subheader("Preview of your data")
-        st.dataframe(clean_data.head(50))
-
-        st.subheader("Columns detected")
-        st.write(clean_data.columns)
+    st.subheader("Columns detected")
+    st.write(data.columns)
