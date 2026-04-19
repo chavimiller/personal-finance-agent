@@ -6,7 +6,7 @@ import re
 st.title("Please upload your financial statement in CSV form to get started!")
 
 EXPECTED_HEADERS = [ 
-    "תאריך",  "הפעולה", "פרטים","אסמכתא" ,"חובה" , "זכות" , "יתרה בש''ח" , "תאריך ערך"
+    "תאריך",  "הפעולה", "פרטים","אסמכתא" ,"חובה" , "זכות" , "יתרה בש''ח" , "תאריך ערך", "חיוב לתאריך", "שם בית עסק"
 ]
 
 def normalize_string(s):
@@ -106,34 +106,21 @@ if uploaded_file:
     data = pd.read_csv(pd.io.common.StringIO(text), header=best_index, dtype=str)
 
     data.columns = data.columns.str.strip().str.lower().str.replace(" ", "_")
+    for col in data.columns:
+     data[col] = data[col].astype(str)
 
-    data['חובה'] = data['חובה'].str.replace(",", '', regex=True).astype(float)
-    data['זכות'] = data['זכות'].str.replace(',', '', regex=True).astype(float)
-    data['אסמכתא'] = data['אסמכתא'].astype(float)
-
-    data['תאריך'] = (
-        data['תאריך']
-        .astype(str)              
-        .str.strip()
-        .str.replace('\xa0', '', regex=False)  
-        .str.replace('\u200f', '', regex=False)
-        .str.replace('"', '', regex=False)      
-    )
-    data['תאריך'] = pd.to_datetime(data['תאריך'], dayfirst=True, errors='coerce')
-    data['year_month'] = data['תאריך'].dt.to_period('M')
-    monthly_spending = data.groupby('year_month')['חובה'].sum().reset_index()
-    monthly_spending['year_month'] = monthly_spending['year_month'].astype(str)
-
+    if 'תאריך' in data.columns:
+        data['תאריך'] = (
+            data['תאריך']
+            .astype(str)              
+            .str.strip()
+            .str.replace('\xa0', '', regex=False)  
+            .str.replace('\u200f', '', regex=False)
+            .str.replace('"', '', regex=False)      
+        )
+        data['תאריך'] = pd.to_datetime(data['תאריך'], dayfirst=True, errors='coerce')
     st.subheader("Preview of your data")
     st.dataframe(data.head(50))
-
-    st.subheader("Columns detected")
-    st.write(data.columns)
-
-    st.subheader("Total Spending per Month")
-    st.line_chart(
-        data=monthly_spending.set_index('year_month')['חובה']
-    )
 
 # TESTING OF SCORING
 
