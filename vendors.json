@@ -1,5 +1,4 @@
 {
-    "strong" : {
   "מכולת": "groceries",
   "שופרסל": "groceries",
   "מאפה": "restaurants",
@@ -14,5 +13,5 @@
   "עירית" : "bills",
   "סלקום": "bills",
   "אמישראגז" : "bills",
-  "gett" : "transport"},
+  "gett" : "transport"
 }
