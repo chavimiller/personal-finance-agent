@@ -3,6 +3,60 @@ import pandas as pd
 import unicodedata 
 import re
 
+# STEP ONE: Split up all data in csv to tables
+# STEP TWO: Decide which tables are relevant and discard the ones that are not
+def is_header(row):
+    row = [str(x).strip() for x in row]
+
+    non_numeric_ratio = sum(not re.fullmatch(r"-?\d+(\.\d+)?", x.replace(",", "")) for x in row) / len(row)
+
+    has_keywords = any(
+        any(kw in cell for kw in ["יתרה", "זכות", "חובה", "סכום", "תאריך"])
+        for cell in row
+    )
+    return non_numeric_ratio > 0.7 and (has_keywords or len(row) >= 4)
+
+def split_data_tables(rows):
+    tables = []
+    current_table = [] # visually: tables = [[current_table], [current_table]]
+
+    for row in rows:
+        
+        if all(str(x).strip() == "" for x in row):
+            continue
+
+        if is_header(row):
+            if current_table: # if there is already a different table held in current_table
+                tables.append(current_table) # then lets close out this table, add to tables list
+                current_table = [row] # now lets start our new table with the row we are on
+                continue
+       
+        if current_table:
+                current_table.append(row)
+        
+
+    if current_table:
+        tables.append(current_table)
+
+    return tables
+
+def is_transaction_table(table):
+
+    # function to determine whether table is relevant to transactions or not
+
+    if len(table) < 4:
+        return False
+    
+    has_real_numbers = any(
+        any(re.search(r"\d", str(cell)) for cell in row)
+        for row in table[1:]
+    )
+
+    if not has_real_numbers:
+        return False
+    
+    return True
+
 st.title("Please upload your financial statement in CSV form to get started!")
 
 uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
@@ -12,7 +66,21 @@ if uploaded_file:
     df = df.dropna(axis='columns', how='all')
     st.dataframe(df)
 
+    rows = df.values.tolist()
+    tables = split_data_tables(rows)
 
+    relevant_tables = [t for t in tables if is_transaction_table(t)]
+    # Have variable for current_table
+    # Variable to hold all tables
+    # Collecting = True/False ?
+    # use is_header(line) to determine if given line is a header or not
+
+    # if True, store line as first line of current_table, it will be index 0
+        # loop through all lines
+        # if line is blank, end current_table.
+        # store current_table as table_1
+
+    # if False, continue until we hit logic that returns True
 
 # EXPECTED_HEADERS = [ 
 #     "תאריך",  "הפעולה", "פרטים","אסמכתא" ,"חובה" , "זכות" , "יתרה בש''ח" , "תאריך ערך", "חיוב לתאריך", "שם בית עסק"
