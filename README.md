@@ -9,3 +9,7 @@ The first step of this project is to successfully read and extract the correct d
 Using Streamlit and pandas, I can successfully read the csv files and display the data in a table in a web browser page, however I am currently hard-coding the program to set row 3 as the column headers for simplicity at this stage. Later, I will have the AI agent detect the column headers. The headers successfully were set in the correct order, with the direction of Hebrew (right-to-left) accounted for.
 
 Next I tested some different ways of organizing the data, first by categorizing spending per month. Next I would like to plot out the income per month, and finally the net amount.
+
+Currently, I have part of the column header detection logic working for identifying the checking account statements. The problem encountered with capturing the correct data from different bank statements was the various ways each bank and each card may format their statements. So the method of detecting the correct column headers that I implemented was to use a scoring system, to score the likelihood of a given row to be the correct row of column headers for the transactions.
+
+The program now correctly identifies headers, but now it must sift out relevant headers in order for the is_transaction_row() function to work properly. The next step is to work on identifying the relevant headers

@@ -3,18 +3,36 @@ import pandas as pd
 import unicodedata 
 import re
 
-# STEP ONE: Split up all data in csv to tables
-# STEP TWO: Decide which tables are relevant and discard the ones that are not
 def is_header(row):
-    row = [str(x).strip() for x in row]
+    row = [str(x).strip() for x in row if str(x).strip() != ""]
+    
+    if len(row) < 3:    
+        return False
 
-    non_numeric_ratio = sum(not re.fullmatch(r"-?\d+(\.\d+)?", x.replace(",", "")) for x in row) / len(row)
+    numeric_count = sum(
+        bool(re.fullmatch(r"-?\d+([.,]\d+)?", x.replace(",", "")))
+        for x in row
+    )
 
-    has_keywords = any(
-        any(kw in cell for kw in ["יתרה", "זכות", "חובה", "סכום", "תאריך"])
+    non_numeric_ratio = (len(row) - numeric_count) / len(row)
+
+    keywords = ["תאריך", "זכות", "חובה", "סכום", "יתרה", "פרטים", "אסמכתא"]
+
+    keyword_matches = sum(
+        any(kw in cell for kw in keywords)
         for cell in row
     )
-    return non_numeric_ratio > 0.7 and (has_keywords or len(row) >= 4)
+
+    has_date_like = any(
+        re.search(r"\d{1,2}/\d{1,2}/\d{2,4}", cell)
+        for cell in row
+    )
+    
+    return (
+        non_numeric_ratio > 0.8 and     
+        keyword_matches >= 2 and        
+        not has_date_like              
+    ) 
 
 def split_data_tables(rows):
     tables = []
@@ -25,7 +43,11 @@ def split_data_tables(rows):
         if all(str(x).strip() == "" for x in row):
             continue
 
+        st.write("ROW:", row)
+        st.write("IS HEADER:", is_header(row))
+        
         if is_header(row):
+
             if current_table: # if there is already a different table held in current_table
                 tables.append(current_table) # then lets close out this table, add to tables list
                 current_table = [row] # now lets start our new table with the row we are on
@@ -68,8 +90,22 @@ if uploaded_file:
 
     rows = df.values.tolist()
     tables = split_data_tables(rows)
+    st.write(f"Total tables found: {len(tables)}")
+
+    for i, t in enumerate(tables):
+        st.write(f"Table {i+1} preview:")
+        st.write(t[:3])  # first 3 rows
 
     relevant_tables = [t for t in tables if is_transaction_table(t)]
+
+    if relevant_tables:
+        st.subheader("Detected transaction tables")
+        for i, table in enumerate(relevant_tables):
+            st.write(f"Table {i+1}")
+            table_df = pd.DataFrame(table[1:], columns=table[0] )
+            st.dataframe(table_df)
+    else:
+        st.warning("No transaction tables detected :( ")
     # Have variable for current_table
     # Variable to hold all tables
     # Collecting = True/False ?
