@@ -1,7 +1,13 @@
 import streamlit as st
 import pandas as pd
+
 import unicodedata 
+from pathlib import Path
 import re
+
+
+import json
+CATEGORY_FILE = Path("vendors.json")
 
 def is_header(row):
     row = [str(x).strip() for x in row if str(x).strip() != ""]
@@ -16,7 +22,7 @@ def is_header(row):
 
     non_numeric_ratio = (len(row) - numeric_count) / len(row)
 
-    keywords = ["תאריך", "זכות", "חובה", "סכום", "יתרה", "פרטים", "אסמכתא"]
+    keywords = ["תאריך", "זכות", "חובה", "סכום", "יתרה", "פרטים", "אסמכתא", "מספר", 'חשבון']
 
     keyword_matches = sum(
         any(kw in cell for kw in keywords)
@@ -37,21 +43,23 @@ def is_header(row):
 def split_data_tables(rows):
     tables = []
     current_table = [] # visually: tables = [[current_table], [current_table]]
+    headers = []
 
     for row in rows:
         
         if all(str(x).strip() == "" for x in row):
+            if current_table:
+                tables.append(current_table)
+                current_table = []
             continue
-
-        st.write("ROW:", row)
-        st.write("IS HEADER:", is_header(row))
         
         if is_header(row):
+            headers.append(row)
 
             if current_table: # if there is already a different table held in current_table
                 tables.append(current_table) # then lets close out this table, add to tables list
-                current_table = [row] # now lets start our new table with the row we are on
-                continue
+            current_table = [row] # now lets start our new table with the row we are on
+            continue
        
         if current_table:
                 current_table.append(row)
@@ -60,222 +68,146 @@ def split_data_tables(rows):
     if current_table:
         tables.append(current_table)
 
-    return tables
+    return tables, headers
+
+def is_transaction_row(row):
+    row = [str(x).strip() for x in row if str(x).strip() != ""]
+
+    if len(row) < 2:
+        return False
+    
+    text = " ".join(row)
+
+    has_date = bool(re.search(r"\d{1,2}[./-]\d{1,2}[./-]\d{2,4}", text))
+
+    has_money = bool(re.search(r"-?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?", text))
+
+    looks_like_metadata = any(
+        kw in text for kw in ["מספר חשבון", "תאריך הפקה", "תנועות בחשבון"]
+    )
+
+    return has_date and has_money and not looks_like_metadata
 
 def is_transaction_table(table):
 
-    # function to determine whether table is relevant to transactions or not
+    # function to determine whether table is relevant to transactions or not 
 
-    if len(table) < 4:
+    if len(table) < 2:
         return False
-    
-    has_real_numbers = any(
-        any(re.search(r"\d", str(cell)) for cell in row)
-        for row in table[1:]
+
+    data_rows = table[1:]
+
+    transaction_rows = sum(
+        is_transaction_row(row) for row in data_rows
     )
+    return transaction_rows >= 1
 
-    if not has_real_numbers:
-        return False
-    
-    return True
 
-st.title("Please upload your financial statement in CSV form to get started!")
+def loading_categories():
+    try:
+        if CATEGORY_FILE.exists():
+            with open(CATEGORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        return {}
+    return 
+
+def save_categories(data):
+    with open(CATEGORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+CATEGORY_RULES_HE = loading_categories()
+
+st.title("Please upload your bank or credit card statement in CSV form to get started!")
 
 uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
 
 if uploaded_file: 
-    df = pd.read_csv(uploaded_file).dropna(axis='index', how='all')
+    try:
+        df = pd.read_csv(uploaded_file, encoding="utf-8-sig")
+    except Exception:
+        uploaded_file.seek(0)
+        df = pd.read_csv(uploaded_file, encoding="latin1")
     df = df.dropna(axis='columns', how='all')
+    
     st.dataframe(df)
 
     rows = df.values.tolist()
-    tables = split_data_tables(rows)
+
+    result = split_data_tables(rows)
+
+    if not isinstance(result, tuple) or len(result) != 2:
+        st.error("split_data_tables did not return expected output")
+        st.stop()
+    
+    tables, headers = result
+    
+    st.write("DEBUG: split complete")
+
     st.write(f"Total tables found: {len(tables)}")
-
-    for i, t in enumerate(tables):
-        st.write(f"Table {i+1} preview:")
-        st.write(t[:3])  # first 3 rows
-
+    st.write(f"Total headers detected: {len(headers)}")
+ 
     relevant_tables = [t for t in tables if is_transaction_table(t)]
 
     if relevant_tables:
         st.subheader("Detected transaction tables")
         for i, table in enumerate(relevant_tables):
             st.write(f"Table {i+1}")
-            table_df = pd.DataFrame(table[1:], columns=table[0] )
-            st.dataframe(table_df)
-    else:
-        st.warning("No transaction tables detected :( ")
-    # Have variable for current_table
-    # Variable to hold all tables
-    # Collecting = True/False ?
-    # use is_header(line) to determine if given line is a header or not
+            header = table[0]
 
-    # if True, store line as first line of current_table, it will be index 0
-        # loop through all lines
-        # if line is blank, end current_table.
-        # store current_table as table_1
+            table_rows = [
+                r[:len(header)]
+                for r in table[1:]
+                if is_transaction_row(r)
+            ]
 
-    # if False, continue until we hit logic that returns True
-
-# EXPECTED_HEADERS = [ 
-#     "תאריך",  "הפעולה", "פרטים","אסמכתא" ,"חובה" , "זכות" , "יתרה בש''ח" , "תאריך ערך", "חיוב לתאריך", "שם בית עסק"
-# ]
-
-# def normalize_string(s):
-#     s = str(s)
-#     s = s.strip()                
-#     s = s.replace("\u200f", "")     
-#     s = s.replace("\xa0", "")      
-#     s = s.replace('"', '')        
-#     s = unicodedata.normalize('NFKC', s)  
-#     return s
-
-# def is_section_header(line):
-#     line = line.strip()
-
-#     if not line:
-#         return False
-#     if "\t" in line:
-#         return False
-#     if len(line) > 60:
-#         return False
-#     if re.search(r"[א-תA-Za-z]",line):
-#         return True
-#     return False
-
-# def split_into_sections(lines):
-#     sections = []
-#     current_section = {"name": "unknown", "lines": []}
-#     for line in lines:
-#         line = line.strip()
-#         if not line:
-#             continue
-#         if is_section_header(line): # if we encounter a section header
-#             if current_section["lines"]: # if "lines": in current_section has any collected rows
-#                 sections.append(current_section) # add the last section to the sections array
-#             current_section = { # clear current section now and start new section
-#                 "name" : line,
-#                 "lines" : []
-#             }
-#         else:
-#             current_section["lines"].append(line) # otherwise store this line inside the current section's line array
-#     # the loop has finished
-#     if current_section["lines"]: # if the current section has any collected rows
-#         sections.append(current_section) # then add this last current section to the sections array
-#     return sections # return all the sections
-
-# def score_header_row(row):
-#     print("DEBUG ROW:", row)
-#     raw_text = normalize_string(" ".join(normalize_string(x) for x in row))
-#     text_str = raw_text.lower()
-#     score = 0
-
-#     if 4 <= len(row) <= 10:
-#         score += 1
-
-#     positive_signals = [
-#        "תאריך",
-#         "אסמכתא",
-#         "עסק",
-#         "סכום",
-#         "קנייה",
-#         "חיוב",
-#         "זכות"
-#     ]
-#     negative_phrases = [
-#         "חיוב קודם"
-#     ]
-
-#     for phrase in negative_phrases:
-#         if phrase in raw_text:
-#             score -= 8
-#             raw_text = raw_text.replace(phrase, "")
-#             text_str = raw_text.lower()
-
-#     for signal in positive_signals:
-#         if signal in text_str:
-#             score += 2
-   
-#     return score
-
-
-# uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
-
-# if uploaded_file: 
-#     text = uploaded_file.getvalue().decode("utf-8-sig")
-#     raw_lines = text.splitlines()
-    
-#     sections = split_into_sections(raw_lines)
-
-#     all_tables = []
-
-#     for section in sections:
-#         lines = section["lines"]
-#         if len(lines) < 2:
-#             continue
-
-#         preview = pd.DataFrame(lines)
-
-#         best_score = float("-inf")
-#         best_index = None
-
-#         for i, row in preview.iterrows():
-#             score = score_header_row(row.tolist())
-#             if score > best_score:
-#                 best_score = score
-#                 best_index = i
-
-#             header = lines[best_index].split(",")   
-#             header = [col.strip() for col in header]
-#             header = [col if col != "" else f"unnamed_{i}" for i, col in enumerate(header)]
-
-#             rows = []
-#             for line in lines[best_index + 1:]:
-#                 split_line = line.split(",")
-#                 trimmed_line = split_line[:len(header)]
-#                 rows.append(trimmed_line)
+            table_df = pd.DataFrame(table_rows)
             
-#             df = pd.DataFrame(rows, columns = header)
-#             all_tables.append(df)
+            clean_header = [
+                str(col).strip() if pd.notna(col) else f"Unnamed_{i}"
+                for i, col in enumerate(header[:len(table_df.columns)])
+            ]
 
-#         data = pd.concat(all_tables, ignore_index=True)
+            table_df.columns = clean_header
 
-#     data.columns = data.columns.str.strip().str.lower().str.replace(" ", "_")
-#     for col in data.columns:
-#      data[col] = data[col].astype(str)
+            st.dataframe(table_df)
 
-#     if 'תאריך' in data.columns:
-#         data['תאריך'] = (
-#             data['תאריך']
-#             .astype(str)              
-#             .str.strip()
-#             .str.replace('\xa0', '', regex=False)  
-#             .str.replace('\u200f', '', regex=False)
-#             .str.replace('"', '', regex=False)      
-#         )
-#         data['תאריך'] = pd.to_datetime(data['תאריך'], dayfirst=True, errors='coerce')
-#     st.subheader("Preview of your data")
-#     st.dataframe(data.head(50))
+            st.subheader("Categorize Transactions")
 
-# # TESTING OF SCORING
+            for i, row in table_df.iterrows(): # for each transaction row
+                if "שם בית עסק" in table_df.columns:
+                    description = str(row["שם בית עסק"])     
+                else:
+                    description = str(row.iloc[0]) 
+                st.write(description)
+                category = st.selectbox(
+                    f"Category row {i}",
+                    options=list(CATEGORY_RULES_HE.keys()) + ["new_category"],
+                    key=f"cat_{i}"
+                )
 
-# def print_test():
-#     test_rows = [
-#         ["תאריך", "פרטים", "חובה", "זכות"],   # should be HIGH
-#         ["01/01/2024", "שופרסל", "120", ""],  # should be LOW
-#         ["חיוב קודם", "", "", ""],            # should be LOW
-#     ]
+                if category == "new_category":
+                    new_cat = st.text_input(f"New category name for row {i}", key=f"newcat_{i}")
+                else:
+                    new_cat = category
+                if st.button(f"Save row {i}", key=f"save_{i}"):
+                    if new_cat not in CATEGORY_RULES_HE:
+                        CATEGORY_RULES_HE = loading_categories()
+                    
+                    new_cat = new_cat.strip().lower()
+                    keyword = re.sub(r"\d+", "", description).strip().lower()
 
-#     for row in test_rows:
-#         print(score_header_row(row))
+                    CATEGORY_RULES_HE.setdefault(new_cat, [])
+                    
+                    if keyword not in CATEGORY_RULES_HE[new_cat]:
+                        CATEGORY_RULES_HE[new_cat].append(keyword)
 
-# print_test()
-# # Schema for transaction data
-#     # {
-#     #  "merchant": "rami levy",
-#     #  "amount": 50.00,
-#     #  "date": "05-02-2001",
-#     #  "category": null || "groceries",
-#     #  "source": "account XXXX-3456 || april_statement_creditcard"
-#     # }
+                    save_categories(CATEGORY_RULES_HE)
+                    st.success(f"Saved to {new_cat}")
+    else:
+
+        st.warning("No transaction tables detected :( ")
+ 
+
+
+

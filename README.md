@@ -12,4 +12,7 @@ Next I tested some different ways of organizing the data, first by categorizing 
 
 Currently, I have part of the column header detection logic working for identifying the checking account statements. The problem encountered with capturing the correct data from different bank statements was the various ways each bank and each card may format their statements. So the method of detecting the correct column headers that I implemented was to use a scoring system, to score the likelihood of a given row to be the correct row of column headers for the transactions.
 
-The program now correctly identifies headers, but now it must sift out relevant headers in order for the is_transaction_row() function to work properly. The next step is to work on identifying the relevant headers
+The program now correctly identifies headers, but now it must sift out relevant headers in order for the is_transaction_row() function to work properly. The next step is to work on identifying the relevant headers.
+
+I cleaned up the is_header function to correctly discard metadata rows, identify headers with relevant words like "date" or "amount" etc. and to be more than two columns long. 
+
