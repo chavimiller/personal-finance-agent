@@ -1,12 +1,11 @@
-from fastapi import FastAPI, UploadFile, File
-from core.transactions import router as transaction_router
-
-from core.parsing import split_data_tables
-from core.transactions import is_transaction_table
+from fastapi import FastAPI
+from routes.transaction_router import router as transaction_router
+from routes.categories_router import router as categories_router
 
 app = FastAPI()
 
-app.include_router(transaction_router, prefix="/transactions")
+app.include_router(transaction_router, prefix="/transactions", tags=["Transactions"])
+app.include_router(categories_router, prefix="/categories", tags=["Categories"])
 
 @app.get("/")
 def home():

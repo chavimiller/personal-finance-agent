@@ -41,6 +41,6 @@ async def process_csv_controller(file):
             table_df.to_dict(orient="records")
         )
 
-        return {
-            "tables" : result_tables
-        }
+    return {
+        "tables" : result_tables
+    }
