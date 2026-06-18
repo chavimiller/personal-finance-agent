@@ -1,7 +1,4 @@
-import re 
-from fastapi import APIRouter, UploadFile, File
-
-router = APIRouter()
+import re
 
 def is_transaction_row(row):
     row = [str(x).strip() for x in row if str(x).strip() != ""]
@@ -23,8 +20,6 @@ def is_transaction_row(row):
 
 def is_transaction_table(table):
 
-    # function to determine whether table is relevant to transactions or not 
-
     if len(table) < 2:
         return False
 
@@ -34,3 +29,7 @@ def is_transaction_table(table):
         is_transaction_row(row) for row in data_rows
     )
     return transaction_rows >= 1
+
+
+
+
